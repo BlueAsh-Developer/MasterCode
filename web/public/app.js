@@ -418,8 +418,10 @@ async function startBuild() {
         if (!line.startsWith('data: ')) continue;
         try {
           const ev = JSON.parse(line.slice(6));
-          if (ev.type === 'text') appendLine('t-text', ev.content);
-          else if (ev.type === 'tool') appendLine('t-tool', `▶ ${ev.name}: ${JSON.stringify(ev.input).slice(0, 80)}`);
+          if (ev.type === 'start') appendLine('t-log', `▶ Starting ${ev.provider} / ${ev.model}...`);
+          else if (ev.type === 'text') appendLine('t-text', ev.content);
+          else if (ev.type === 'tool') appendLine('t-tool', `⚙ ${ev.name}(${JSON.stringify(ev.input || {}).slice(0, 100)})`);
+          else if (ev.type === 'tool_result') appendLine('t-log', `  ↳ ${JSON.stringify(ev.result).slice(0, 120)}`);
           else if (ev.type === 'file_created') appendLine('t-file', `✓ ${ev.path}`);
           else if (ev.type === 'log') appendLine('t-log', ev.text);
           else if (ev.type === 'complete') { appendLine('t-success', '✦ Build complete!'); refreshCredits(); }
