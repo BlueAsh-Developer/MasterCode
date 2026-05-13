@@ -662,3 +662,226 @@ async function saveApiKeys() {
     msg.style.color = 'var(--green)';
   } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--red)'; }
 }
+
+// ─── Project Dashboard ────────────────────────────────────────────────────────
+function openProject(id) {
+  const project = state.projects.find(p => p.id === id);
+  if (!project) return;
+  state.currentProject = project;
+  document.getElementById('proj-title').textContent = project.name;
+  document.getElementById('project-dashboard').classList.remove('hidden');
+  document.getElementById('main-app').classList.add('hidden');
+  switchProjTab('chat');
+  loadProjectFileTree();
+  loadEnvVars();
+  // Populate settings
+  document.getElementById('proj-name-input').value = project.name;
+  document.getElementById('proj-desc-input').value = project.description || '';
+  document.getElementById('proj-stack-input').value = project.stack || '';
+  // Init model dropdowns
+  setTimeout(() => {
+    renderModelDropdown('model-dropdown', 'model-selector-label', 'model-dot', selectModel);
+    renderModelDropdown('chat-model-dropdown', 'chat-model-label', 'chat-model-dot', selectChatModel);
+  }, 0);
+}
+
+function closeProjectDashboard() {
+  document.getElementById('project-dashboard').classList.add('hidden');
+  document.getElementById('main-app').classList.remove('hidden');
+  navigate('dashboard');
+}
+
+function switchProjTab(tab) {
+  document.querySelectorAll('.proj-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.proj-tab-content').forEach(c => c.classList.add('hidden'));
+  document.getElementById(`proj-tab-${tab}`).classList.remove('hidden');
+}
+
+// ─── Project File Tree ────────────────────────────────────────────────────────
+async function loadProjectFileTree() {
+  if (!state.currentProject) return;
+  const tree = document.getElementById('file-tree');
+  if (!tree) return;
+  try {
+    const data = await api('GET', `/api/files/${state.currentProject.id}`);
+    tree.innerHTML = data.files.map(f => {
+      if (f.type === 'dir') return `<div class="tree-dir" onclick="toggleProjDir(this,'${f.path}')"><span class="tree-icon">📁</span>${esc(f.name)}<div class="tree-children hidden"></div></div>`;
+      return `<div class="tree-file" onclick="openProjFile('${f.path}')"><span class="tree-icon">📄</span>${esc(f.name)}</div>`;
+    }).join('');
+  } catch {}
+}
+
+async function toggleProjDir(el, dirPath) {
+  const children = el.querySelector('.tree-children');
+  if (children.classList.toggle('hidden')) return;
+  if (children.innerHTML) return;
+  try {
+    const data = await api('GET', `/api/files/${state.currentProject.id}?path=${encodeURIComponent(dirPath)}`);
+    children.innerHTML = data.files.map(f => {
+      if (f.type === 'dir') return `<div class="tree-dir" onclick="toggleProjDir(this,'${f.path}')"><span class="tree-icon">📁</span>${esc(f.name)}<div class="tree-children hidden"></div></div>`;
+      return `<div class="tree-file" onclick="openProjFile('${f.path}')"><span class="tree-icon">📄</span>${esc(f.name)}</div>`;
+    }).join('');
+  } catch {}
+}
+
+async function openProjFile(filePath) {
+  if (!state.currentProject) return;
+  try {
+    const data = await api('GET', `/api/files/${state.currentProject.id}/read?path=${encodeURIComponent(filePath)}`);
+    document.getElementById('code-editor').value = data.content;
+    document.getElementById('editor-filename').textContent = filePath;
+    state.currentFile = { projectId: state.currentProject.id, path: filePath };
+    switchProjTab('code');
+  } catch (e) { alert(e.message); }
+}
+
+async function saveFile() {
+  if (!state.currentFile) return;
+  const content = document.getElementById('code-editor').value;
+  try {
+    await api('POST', `/api/files/${state.currentFile.projectId}/write`, { path: state.currentFile.path, content });
+  } catch (e) { alert(e.message); }
+}
+
+// ─── Project Chat ─────────────────────────────────────────────────────────────
+function chatKeydown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendProjectChat(); } }
+
+async function sendProjectChat() {
+  const input = document.getElementById('proj-chat-input');
+  const msg = input.value.trim();
+  if (!msg || !state.currentProject) return;
+  input.value = '';
+
+  const messages = document.getElementById('proj-chat-messages');
+  messages.innerHTML += `<div class="msg user"><div class="msg-avatar">You</div><div class="msg-bubble">${esc(msg)}</div></div>`;
+
+  const aiDiv = document.createElement('div');
+  aiDiv.className = 'msg ai';
+  aiDiv.innerHTML = `<div class="msg-avatar">AI</div><div class="msg-bubble"><span class="typing-dots">···</span></div>`;
+  messages.appendChild(aiDiv);
+  messages.scrollTop = messages.scrollHeight;
+
+  const bubble = aiDiv.querySelector('.msg-bubble');
+  const terminal = document.getElementById('proj-terminal-body');
+
+  const appendTerm = (cls, text) => {
+    const d = document.createElement('div');
+    d.className = cls; d.textContent = text;
+    terminal.appendChild(d);
+    terminal.scrollTop = terminal.scrollHeight;
+  };
+
+  state.chatHistory.push({ role: 'user', content: msg });
+
+  try {
+    const res = await fetch('/api/agent/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ message: msg, projectId: state.currentProject.id, history: state.chatHistory.slice(-10), model: state.selectedModel, provider: state.selectedProvider }),
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', fullText = '';
+    bubble.innerHTML = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'text') { fullText += ev.content; bubble.textContent = fullText; messages.scrollTop = messages.scrollHeight; }
+          else if (ev.type === 'tool') appendTerm('t-tool', `▶ ${ev.name}`);
+          else if (ev.type === 'file_created') { appendTerm('t-file', `✓ ${ev.path}`); loadProjectFileTree(); }
+          else if (ev.type === 'log') appendTerm('t-log', ev.text);
+          else if (ev.type === 'complete') { appendTerm('t-success', '✦ Done'); refreshCredits(); }
+          else if (ev.type === 'error') appendTerm('t-error', `✗ ${ev.message}`);
+        } catch {}
+      }
+    }
+    state.chatHistory.push({ role: 'assistant', content: fullText });
+  } catch (e) { bubble.textContent = `Error: ${e.message}`; }
+}
+
+// ─── Preview ──────────────────────────────────────────────────────────────────
+function refreshPreview() {
+  const frame = document.getElementById('preview-frame');
+  frame.src = frame.src;
+}
+function openPreviewExternal() {
+  const url = document.getElementById('preview-url').value;
+  if (url && url !== 'No server running') window.open(url, '_blank');
+}
+
+// ─── Deploy ───────────────────────────────────────────────────────────────────
+function deployProject() { switchProjTab('deploy'); }
+function deployTo(platform) {
+  const log = document.getElementById('deploy-log');
+  log.innerHTML = `<div class="t-log">Preparing deployment to ${platform}...</div>
+    <div class="t-log">Run: <code>cd ${state.currentProject?.name || 'project'} && npx ${platform} deploy</code></div>
+    <div class="t-success">✦ Open your terminal in the project directory and run the command above.</div>`;
+}
+
+// ─── Env Variables ────────────────────────────────────────────────────────────
+async function loadEnvVars() {
+  if (!state.currentProject) return;
+  try {
+    const data = await api('GET', `/api/files/${state.currentProject.id}/read?path=.env`);
+    state.envVars = data.content.split('\n').filter(l => l.trim() && !l.startsWith('#')).map(l => {
+      const [k, ...v] = l.split('=');
+      return { key: k.trim(), value: v.join('=').trim() };
+    });
+  } catch { state.envVars = []; }
+  renderEnvList();
+}
+
+function renderEnvList() {
+  const list = document.getElementById('env-list');
+  if (!list) return;
+  list.innerHTML = state.envVars.map((v, i) => `
+    <div class="env-row">
+      <input class="env-key" value="${esc(v.key)}" placeholder="KEY" onchange="state.envVars[${i}].key=this.value">
+      <input class="env-val" type="password" value="${esc(v.value)}" placeholder="value" onchange="state.envVars[${i}].value=this.value">
+      <button class="btn-icon" onclick="state.envVars.splice(${i},1);renderEnvList()">✕</button>
+    </div>`).join('');
+}
+
+function addEnvVar() {
+  state.envVars.push({ key: '', value: '' });
+  renderEnvList();
+}
+
+async function saveEnvVars() {
+  if (!state.currentProject) return;
+  const content = state.envVars.filter(v => v.key).map(v => `${v.key}=${v.value}`).join('\n');
+  try {
+    await api('POST', `/api/files/${state.currentProject.id}/write`, { path: '.env', content });
+    alert('Saved .env');
+  } catch (e) { alert(e.message); }
+}
+
+// ─── Project Settings ─────────────────────────────────────────────────────────
+async function saveProjectSettings() {
+  if (!state.currentProject) return;
+  const name = document.getElementById('proj-name-input').value.trim();
+  const description = document.getElementById('proj-desc-input').value.trim();
+  const stack = document.getElementById('proj-stack-input').value.trim();
+  try {
+    await api('PUT', `/api/projects/${state.currentProject.id}`, { name, description, stack }).catch(() => {});
+    state.currentProject.name = name;
+    document.getElementById('proj-title').textContent = name;
+    const p = state.projects.find(x => x.id === state.currentProject.id);
+    if (p) { p.name = name; p.description = description; p.stack = stack; }
+  } catch {}
+}
+
+async function deleteCurrentProject() {
+  if (!state.currentProject) return;
+  if (!confirm('Delete this project permanently?')) return;
+  await deleteProject(state.currentProject.id);
+  closeProjectDashboard();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+checkAuth();
