@@ -8,60 +8,158 @@
 </head>
 <body>
 <div id="app">
-  <!-- Auth Screen -->
-  <div id="auth-screen" class="screen">
-    <div class="auth-wrap">
+
+  <!-- ═══ HOMEPAGE ═══ -->
+  <div id="home-screen" class="screen">
+    <nav class="home-nav">
+      <div class="home-logo">Master<span>Code</span></div>
+      <div class="home-nav-links">
+        <a href="#features">Features</a>
+        <a href="#models">Models</a>
+        <button class="btn-outline" onclick="showAuth('login')">Sign In</button>
+        <button class="btn-primary" onclick="showAuth('register')">Get Started</button>
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-badge">✦ Powered by Claude &amp; Gemini</div>
+      <h1 class="hero-title">Build Full-Stack Apps<br><span class="gradient-text">with AI in Seconds</span></h1>
+      <p class="hero-sub">MasterCode is a Replit-like AI agent that writes, runs, and deploys complete web applications. Just describe what you want.</p>
+      <div class="hero-actions">
+        <button class="btn-primary btn-lg" onclick="showAuth('register')">Start Building Free</button>
+        <button class="btn-ghost btn-lg" onclick="showAuth('login')">Sign In →</button>
+      </div>
+      <div class="hero-demo">
+        <div class="demo-terminal">
+          <div class="terminal-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span class="demo-title">MasterCode Agent</span></div>
+          <div class="demo-lines">
+            <div class="demo-line"><span class="demo-prompt">You</span> Build a SaaS dashboard with auth, charts, and dark mode</div>
+            <div class="demo-line typing"><span class="demo-prompt ai">AI</span> <span class="demo-typing">Scaffolding Next.js project... installing dependencies... writing components...</span></div>
+            <div class="demo-line"><span class="demo-file">✓ Created</span> app/dashboard/page.tsx</div>
+            <div class="demo-line"><span class="demo-file">✓ Created</span> components/charts/AreaChart.tsx</div>
+            <div class="demo-line"><span class="demo-file">✓ Created</span> lib/auth.ts</div>
+            <div class="demo-line success">✦ Build complete — 24 files, ready to deploy</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features-section" id="features">
+      <div class="section-label">Capabilities</div>
+      <h2 class="section-title">Everything you need to ship</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <div class="feature-name">Replit-like Agent</div>
+          <div class="feature-desc">AI autonomously writes, runs commands, installs packages, and fixes errors — just like a real developer.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <div class="feature-name">Multi-Model Support</div>
+          <div class="feature-desc">Choose from Claude Opus, Sonnet, Haiku or Gemini 2.5 Pro, Flash — pick the right model for your task.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <div class="feature-name">Premium UI</div>
+          <div class="feature-desc">Glassmorphism, dark mode, animations, Tailwind CSS, shadcn/ui — beautiful apps by default.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🗄️</div>
+          <div class="feature-name">Full-Stack</div>
+          <div class="feature-desc">React, Next.js, Vue, Express, FastAPI, PostgreSQL, MongoDB, Prisma — any stack you need.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📁</div>
+          <div class="feature-name">Project Dashboard</div>
+          <div class="feature-desc">Preview, code editor, chat, deploy, env variables — a complete IDE in your browser.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🚀</div>
+          <div class="feature-name">One-Click Deploy</div>
+          <div class="feature-desc">Deploy to Vercel, Netlify, or Railway directly from the dashboard with zero config.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="models-section" id="models">
+      <div class="section-label">AI Models</div>
+      <h2 class="section-title">Choose your AI</h2>
+      <div class="models-grid">
+        <div class="model-card provider-claude">
+          <div class="provider-badge claude-badge">Anthropic</div>
+          <div class="model-list">
+            <div class="model-item"><span class="model-name">Claude Opus 4.5</span><span class="model-tag best">Best</span></div>
+            <div class="model-item"><span class="model-name">Claude Sonnet 4.5</span><span class="model-tag fast">Fast</span></div>
+            <div class="model-item"><span class="model-name">Claude Haiku 3.5</span><span class="model-tag quick">Quick</span></div>
+          </div>
+        </div>
+        <div class="model-card provider-gemini">
+          <div class="provider-badge gemini-badge">Google</div>
+          <div class="model-list">
+            <div class="model-item"><span class="model-name">Gemini 2.5 Pro</span><span class="model-tag best">Best</span></div>
+            <div class="model-item"><span class="model-name">Gemini 2.0 Flash</span><span class="model-tag fast">Fast</span></div>
+            <div class="model-item"><span class="model-name">Gemini 1.5 Pro</span><span class="model-tag stable">Stable</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="home-footer">
+      <div class="home-logo">Master<span>Code</span></div>
+      <div class="footer-links">
+        <a href="#">Privacy</a><a href="#">Terms</a><a href="#">GitHub</a>
+      </div>
+      <div class="footer-copy">© 2026 MasterCode. Built with ❤️ for developers.</div>
+    </footer>
+  </div>
+
+  <!-- ═══ AUTH MODAL ═══ -->
+  <div id="auth-modal" class="modal-overlay hidden" onclick="closeAuthModal(event)">
+    <div class="modal-box">
+      <button class="modal-close" onclick="hideAuth()">✕</button>
       <div class="auth-logo">Master<span>Code</span></div>
-      <div class="auth-sub">Cloud AI Agent for Full-Stack Development</div>
       <div class="auth-tabs">
-        <button class="tab-btn active" onclick="showTab('login')">Login</button>
-        <button class="tab-btn" onclick="showTab('register')">Register</button>
+        <button class="tab-btn active" id="tab-login" onclick="showTab('login')">Sign In</button>
+        <button class="tab-btn" id="tab-register" onclick="showTab('register')">Register</button>
       </div>
       <form id="login-form" class="auth-form" onsubmit="login(event)">
-        <input type="email" id="login-email" placeholder="Email" required>
-        <input type="password" id="login-password" placeholder="Password" required>
-        <button type="submit" class="btn-primary">Sign In</button>
+        <input type="email" id="login-email" placeholder="Email" required autocomplete="email">
+        <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password">
+        <button type="submit" class="btn-primary btn-full">Sign In</button>
         <div id="login-error" class="form-error"></div>
       </form>
       <form id="register-form" class="auth-form hidden" onsubmit="register(event)">
         <input type="text" id="reg-name" placeholder="Full Name" required>
-        <input type="email" id="reg-email" placeholder="Email" required>
+        <input type="email" id="reg-email" placeholder="Email" required autocomplete="email">
         <input type="password" id="reg-password" placeholder="Password (min 6 chars)" minlength="6" required>
-        <button type="submit" class="btn-primary">Create Account</button>
+        <button type="submit" class="btn-primary btn-full">Create Account</button>
         <div id="reg-error" class="form-error"></div>
       </form>
     </div>
   </div>
 
-  <!-- Main App -->
+  <!-- ═══ MAIN APP ═══ -->
   <div id="main-app" class="hidden">
-    <!-- Sidebar -->
     <aside id="sidebar">
       <div class="sidebar-logo">Master<span>Code</span></div>
       <nav class="sidebar-nav">
         <a href="#" class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
-          <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
-          Dashboard
+          <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>Dashboard
         </a>
         <a href="#" class="nav-item" data-page="build" onclick="navigate('build')">
-          <svg viewBox="0 0 24 24"><path d="M13 2.05v2.02c3.95.49 7 3.85 7 7.93 0 3.21-1.81 6-4.72 7.72L13 17v5h5l-1.22-1.22C19.91 19.07 22 15.76 22 12c0-5.18-3.95-9.45-9-9.95zM11 2.05C5.95 2.55 2 6.82 2 12c0 3.76 2.09 7.07 5.22 8.78L6 22h5V2.05z"/></svg>
-          Build
+          <svg viewBox="0 0 24 24"><path d="M13 2.05v2.02c3.95.49 7 3.85 7 7.93 0 3.21-1.81 6-4.72 7.72L13 17v5h5l-1.22-1.22C19.91 19.07 22 15.76 22 12c0-5.18-3.95-9.45-9-9.95zM11 2.05C5.95 2.55 2 6.82 2 12c0 3.76 2.09 7.07 5.22 8.78L6 22h5V2.05z"/></svg>Build
         </a>
         <a href="#" class="nav-item" data-page="chat" onclick="navigate('chat')">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-          AI Chat
+          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>AI Chat
         </a>
         <a href="#" class="nav-item" data-page="files" onclick="navigate('files')">
-          <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
-          File Manager
+          <svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>Files
         </a>
         <a href="#" class="nav-item" data-page="credits" onclick="navigate('credits')">
-          <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
-          Credits
+          <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>Credits
         </a>
         <a href="#" class="nav-item" data-page="settings" onclick="navigate('settings')">
-          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-          Settings
+          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>Settings
         </a>
       </nav>
       <div class="sidebar-footer">
@@ -73,7 +171,6 @@
       </div>
     </aside>
 
-    <!-- Pages -->
     <main id="content">
       <div id="page-dashboard" class="page"></div>
       <div id="page-build" class="page hidden"></div>
@@ -83,8 +180,141 @@
       <div id="page-settings" class="page hidden"></div>
     </main>
   </div>
-</div>
 
+  <!-- ═══ PROJECT DASHBOARD OVERLAY ═══ -->
+  <div id="project-dashboard" class="proj-overlay hidden">
+    <div class="proj-header">
+      <button class="proj-back" onclick="closeProjectDashboard()">← Back</button>
+      <div class="proj-title-wrap">
+        <span class="proj-title" id="proj-title">Project</span>
+        <span class="proj-status" id="proj-status"></span>
+      </div>
+      <div class="proj-header-actions">
+        <!-- Model selector dropdown -->
+        <div class="model-dropdown-wrap" id="model-dropdown-wrap">
+          <button class="model-selector-btn" id="model-selector-btn" onclick="toggleModelDropdown()">
+            <span class="model-provider-dot" id="model-dot"></span>
+            <span id="model-selector-label">Select Model</span>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+          </button>
+          <div class="model-dropdown" id="model-dropdown"></div>
+        </div>
+        <button class="btn-primary btn-sm" onclick="deployProject()">🚀 Deploy</button>
+      </div>
+    </div>
+
+    <div class="proj-tabs">
+      <button class="proj-tab active" data-tab="preview" onclick="switchProjTab('preview')">👁 Preview</button>
+      <button class="proj-tab" data-tab="code" onclick="switchProjTab('code')">📄 Code</button>
+      <button class="proj-tab" data-tab="chat" onclick="switchProjTab('chat')">💬 Chat</button>
+      <button class="proj-tab" data-tab="deploy" onclick="switchProjTab('deploy')">🚀 Deploy</button>
+      <button class="proj-tab" data-tab="env" onclick="switchProjTab('env')">🔑 Env</button>
+      <button class="proj-tab" data-tab="settings" onclick="switchProjTab('settings')">⚙ Settings</button>
+    </div>
+
+    <div class="proj-body">
+      <div id="proj-tab-preview" class="proj-tab-content">
+        <div class="preview-toolbar">
+          <button class="preview-btn" onclick="refreshPreview()">↺ Refresh</button>
+          <input class="preview-url" id="preview-url" readonly value="No server running">
+          <button class="preview-btn" onclick="openPreviewExternal()">↗ Open</button>
+        </div>
+        <iframe id="preview-frame" class="preview-frame" src="about:blank"></iframe>
+      </div>
+
+      <div id="proj-tab-code" class="proj-tab-content hidden">
+        <div class="code-layout">
+          <div class="file-tree" id="file-tree"></div>
+          <div class="code-editor-wrap">
+            <div class="editor-toolbar">
+              <span class="editor-filename" id="editor-filename">Select a file</span>
+              <button class="btn-sm btn-secondary" onclick="saveFile()">Save</button>
+            </div>
+            <textarea class="code-editor" id="code-editor" spellcheck="false" placeholder="Select a file to edit..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div id="proj-tab-chat" class="proj-tab-content hidden">
+        <div class="proj-chat-wrap">
+          <div class="proj-chat-messages" id="proj-chat-messages"></div>
+          <div class="proj-chat-input-wrap">
+            <div class="proj-chat-toolbar">
+              <div class="model-dropdown-wrap" id="chat-model-dropdown-wrap">
+                <button class="model-selector-btn sm" id="chat-model-btn" onclick="toggleChatModelDropdown()">
+                  <span class="model-provider-dot" id="chat-model-dot"></span>
+                  <span id="chat-model-label">Select Model</span>
+                  <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+                </button>
+                <div class="model-dropdown" id="chat-model-dropdown"></div>
+              </div>
+            </div>
+            <div class="proj-chat-input-row">
+              <textarea id="proj-chat-input" class="proj-chat-input" placeholder="Ask AI to modify your project..." rows="2" onkeydown="chatKeydown(event)"></textarea>
+              <button class="btn-primary" id="proj-chat-send" onclick="sendProjectChat()">Send</button>
+            </div>
+          </div>
+        </div>
+        <div class="proj-terminal" id="proj-terminal">
+          <div class="terminal-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span><span style="margin-left:.5rem;font-size:.75rem;color:#64748b">Agent Output</span></div>
+          <div class="terminal-body" id="proj-terminal-body"></div>
+        </div>
+      </div>
+
+      <div id="proj-tab-deploy" class="proj-tab-content hidden">
+        <div class="deploy-panel">
+          <h3 class="panel-title">Deploy Your Project</h3>
+          <div class="deploy-grid">
+            <div class="deploy-card" onclick="deployTo('vercel')">
+              <div class="deploy-icon">▲</div>
+              <div class="deploy-name">Vercel</div>
+              <div class="deploy-desc">Zero-config deployments for Next.js, React, Vue</div>
+            </div>
+            <div class="deploy-card" onclick="deployTo('netlify')">
+              <div class="deploy-icon">◆</div>
+              <div class="deploy-name">Netlify</div>
+              <div class="deploy-desc">Continuous deployment with edge functions</div>
+            </div>
+            <div class="deploy-card" onclick="deployTo('railway')">
+              <div class="deploy-icon">🚂</div>
+              <div class="deploy-name">Railway</div>
+              <div class="deploy-desc">Full-stack apps with databases and services</div>
+            </div>
+          </div>
+          <div class="deploy-log" id="deploy-log"></div>
+        </div>
+      </div>
+
+      <div id="proj-tab-env" class="proj-tab-content hidden">
+        <div class="env-panel">
+          <div class="panel-header">
+            <h3 class="panel-title">Environment Variables</h3>
+            <button class="btn-primary btn-sm" onclick="addEnvVar()">+ Add Variable</button>
+          </div>
+          <div class="env-list" id="env-list"></div>
+          <button class="btn-secondary" onclick="saveEnvVars()">Save .env</button>
+        </div>
+      </div>
+
+      <div id="proj-tab-settings" class="proj-tab-content hidden">
+        <div class="settings-panel">
+          <h3 class="panel-title">Project Settings</h3>
+          <div class="settings-form">
+            <label>Project Name<input type="text" id="proj-name-input" class="settings-input"></label>
+            <label>Description<textarea id="proj-desc-input" class="settings-input" rows="3"></textarea></label>
+            <label>Stack / Framework<input type="text" id="proj-stack-input" class="settings-input" placeholder="e.g. Next.js, React, Vue"></label>
+            <button class="btn-primary" onclick="saveProjectSettings()">Save Settings</button>
+          </div>
+          <div class="danger-zone">
+            <h4>Danger Zone</h4>
+            <button class="btn-danger" onclick="deleteCurrentProject()">Delete Project</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
 <script src="/app.js"></script>
 </body>
 </html>
