@@ -105,6 +105,13 @@ function updateHomeNav() {
     <button class="btn-outline" onclick="logout()">Sign Out</button>`;
 }
 
+function goHome() {
+  document.getElementById('main-app').classList.add('hidden');
+  document.getElementById('project-dashboard').classList.add('hidden');
+  document.getElementById('home-screen').classList.remove('hidden');
+  updateHomeNav();
+}
+
 function showApp() {
   document.getElementById('home-screen').classList.add('hidden');
   document.getElementById('main-app').classList.remove('hidden');
