@@ -10,7 +10,7 @@ import multer from 'multer';
 
 import { db, Users, Sessions, Projects, Builds, Credits } from './db.js';
 import { hashPassword, verifyPassword, createSession, authMiddleware, deductCredits, addCredits, CREDIT_COSTS, PLAN_CREDITS, PLAN_PRICES } from './auth.js';
-import { runWebAgent } from './agent.js';
+import { runWebAgent, MODELS } from './agent.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -71,7 +71,6 @@ app.get('/api/credits', authMiddleware, (req, res) => {
 });
 
 app.post('/api/credits/topup', authMiddleware, (req, res) => {
-  // Demo: free topup (in production, integrate Stripe)
   const { amount = 100 } = req.body;
   const capped = Math.min(Math.max(amount, 10), 500);
   addCredits(req.user.id, capped, 'Manual top-up');
@@ -80,10 +79,22 @@ app.post('/api/credits/topup', authMiddleware, (req, res) => {
 });
 
 app.post('/api/credits/set-api-key', authMiddleware, (req, res) => {
-  const { apiKey } = req.body;
-  if (!apiKey?.startsWith('sk-ant-')) return res.status(400).json({ error: 'Invalid API key' });
-  Users.updateApiKey.run(apiKey, req.user.id);
+  const { apiKey, geminiApiKey } = req.body;
+  if (apiKey && !apiKey.startsWith('sk-ant-')) return res.status(400).json({ error: 'Invalid Anthropic API key' });
+  if (apiKey) Users.updateApiKey.run(apiKey, req.user.id);
+  if (geminiApiKey) {
+    // Store Gemini key in a separate column if it exists, else use a JSON field
+    try {
+      db.prepare('ALTER TABLE users ADD COLUMN gemini_api_key TEXT').run();
+    } catch {}
+    db.prepare('UPDATE users SET gemini_api_key = ? WHERE id = ?').run(geminiApiKey, req.user.id);
+  }
   res.json({ success: true });
+});
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+app.get('/api/models', authMiddleware, (req, res) => {
+  res.json({ models: MODELS });
 });
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
@@ -197,18 +208,32 @@ app.post('/api/files/:projectId/upload', authMiddleware, upload.array('files'), 
 });
 
 // ─── AI Agent (SSE streaming) ─────────────────────────────────────────────────
+function getUserKeys(user) {
+  let geminiKey = null;
+  try {
+    const row = db.prepare('SELECT gemini_api_key FROM users WHERE id = ?').get(user.id);
+    geminiKey = row?.gemini_api_key || process.env.GEMINI_API_KEY || null;
+  } catch {}
+  return {
+    anthropicKey: user.api_key || process.env.ANTHROPIC_API_KEY,
+    geminiKey,
+  };
+}
+
 app.post('/api/agent/build', authMiddleware, async (req, res) => {
-  const { prompt, projectId, history } = req.body;
+  const { prompt, projectId, history, model, provider } = req.body;
   if (!prompt) return res.status(400).json({ error: 'Prompt required' });
 
   const user = Users.findById.get(req.user.id);
-  const apiKey = user.api_key || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(400).json({ error: 'No API key configured. Add it in Settings.' });
+  const { anthropicKey, geminiKey } = getUserKeys(user);
+
+  const resolvedProvider = provider || (model?.startsWith('gemini') ? 'gemini' : 'claude');
+  const apiKey = resolvedProvider === 'gemini' ? geminiKey : anthropicKey;
+  if (!apiKey) return res.status(400).json({ error: `No ${resolvedProvider === 'gemini' ? 'Gemini' : 'Anthropic'} API key configured. Add it in Settings.` });
 
   const cost = CREDIT_COSTS.build;
   if (user.credits < cost) return res.status(402).json({ error: `Not enough credits. Need ${cost}, have ${user.credits}.` });
 
-  // Set up SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -225,7 +250,6 @@ app.post('/api/agent/build', authMiddleware, async (req, res) => {
       Projects.update.run(project.name, project.description, project.stack, projectId, req.user.id);
     }
   } else {
-    // Auto-create project
     const id = uuid();
     projectDir = path.join(PROJECTS_DIR, req.user.id, id);
     fs.ensureDirSync(projectDir);
@@ -241,7 +265,10 @@ app.post('/api/agent/build', authMiddleware, async (req, res) => {
     await runWebAgent({
       prompt,
       projectDir,
-      apiKey,
+      apiKey: resolvedProvider === 'claude' ? apiKey : null,
+      geminiApiKey: resolvedProvider === 'gemini' ? apiKey : null,
+      model,
+      provider: resolvedProvider,
       history: history || [],
       onEvent: send,
     });
@@ -249,7 +276,6 @@ app.post('/api/agent/build', authMiddleware, async (req, res) => {
   } catch (e) {
     send({ type: 'error', message: e.message });
     Builds.update.run('failed', 0, e.message, buildId);
-    // Refund on API error
     if (e.status === 400 || e.status === 401) {
       addCredits(req.user.id, cost, 'Refund: API error');
     }
@@ -259,9 +285,12 @@ app.post('/api/agent/build', authMiddleware, async (req, res) => {
 });
 
 app.post('/api/agent/chat', authMiddleware, async (req, res) => {
-  const { message, projectId, history } = req.body;
+  const { message, projectId, history, model, provider } = req.body;
   const user = Users.findById.get(req.user.id);
-  const apiKey = user.api_key || process.env.ANTHROPIC_API_KEY;
+  const { anthropicKey, geminiKey } = getUserKeys(user);
+
+  const resolvedProvider = provider || (model?.startsWith('gemini') ? 'gemini' : 'claude');
+  const apiKey = resolvedProvider === 'gemini' ? geminiKey : anthropicKey;
   if (!apiKey) return res.status(400).json({ error: 'No API key configured' });
 
   const cost = CREDIT_COSTS.chat_message;
@@ -284,7 +313,16 @@ app.post('/api/agent/chat', authMiddleware, async (req, res) => {
   deductCredits(req.user.id, cost, `Chat: ${message.slice(0, 50)}`);
 
   try {
-    await runWebAgent({ prompt: message, projectDir, apiKey, history: history || [], onEvent: send });
+    await runWebAgent({
+      prompt: message,
+      projectDir,
+      apiKey: resolvedProvider === 'claude' ? apiKey : null,
+      geminiApiKey: resolvedProvider === 'gemini' ? apiKey : null,
+      model,
+      provider: resolvedProvider,
+      history: history || [],
+      onEvent: send,
+    });
   } catch (e) {
     send({ type: 'error', message: e.message });
   }
