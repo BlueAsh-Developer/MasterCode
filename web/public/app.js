@@ -376,3 +376,236 @@ async function sendChat() {
   btn.disabled = false; btn.textContent = 'Send';
   await refreshCredits();
 }
+
+// ─── File Manager ─────────────────────────────────────────────────────────────
+let fileState = { projectId: null, currentPath: '', openFile: null };
+
+function renderFiles() {
+  const el = document.getElementById('page-files');
+  const projectOptions = state.projects.map(p => `<option value="${p.id}" ${state.currentProject?.id === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  el.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">File Manager</div><div class="page-sub">Browse, edit, and manage project files</div></div>
+      <div style="display:flex;gap:.75rem;align-items:center">
+        <select class="project-selector" id="fm-project" onchange="loadFileTree()" style="margin:0">${projectOptions || '<option value="">No projects</option>'}</select>
+        <button class="btn-secondary btn-sm" onclick="newFilePrompt()">+ File</button>
+        <button class="btn-secondary btn-sm" onclick="newFolderPrompt()">+ Folder</button>
+      </div>
+    </div>
+    <div class="file-manager">
+      <div class="file-tree">
+        <div class="tree-header"><span class="tree-title">Files</span></div>
+        <div id="file-tree-content"><div style="color:var(--muted);font-size:.82rem;padding:.5rem">Select a project</div></div>
+      </div>
+      <div class="file-editor">
+        <div class="editor-header">
+          <span class="editor-filename" id="editor-filename">No file open</span>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn-secondary btn-sm" id="save-btn" onclick="saveFile()" style="display:none">Save</button>
+            <button class="btn-danger btn-sm" id="delete-file-btn" onclick="deleteOpenFile()" style="display:none">Delete</button>
+          </div>
+        </div>
+        <textarea class="editor-textarea" id="editor-content" placeholder="Select a file to edit..." spellcheck="false"></textarea>
+      </div>
+    </div>`;
+
+  if (state.currentProject) {
+    document.getElementById('fm-project').value = state.currentProject.id;
+    fileState.projectId = state.currentProject.id;
+    loadFileTree();
+  }
+}
+
+async function loadFileTree() {
+  const sel = document.getElementById('fm-project');
+  fileState.projectId = sel.value;
+  if (!fileState.projectId) return;
+  const tree = document.getElementById('file-tree-content');
+  tree.innerHTML = '<div style="color:var(--muted);font-size:.82rem;padding:.5rem">Loading...</div>';
+  try {
+    const data = await api('GET', `/api/files/${fileState.projectId}?path=`);
+    renderFileList(data.files, tree, '');
+  } catch (e) { tree.innerHTML = `<div style="color:var(--red);font-size:.82rem">${e.message}</div>`; }
+}
+
+function renderFileList(files, container, basePath) {
+  container.innerHTML = '';
+  const sorted = [...files].sort((a, b) => (a.type === 'dir' ? -1 : 1) - (b.type === 'dir' ? -1 : 1) || a.name.localeCompare(b.name));
+  for (const f of sorted) {
+    const item = document.createElement('div');
+    const fullPath = basePath ? `${basePath}/${f.name}` : f.name;
+    item.className = `file-item ${f.type}`;
+    item.innerHTML = f.type === 'dir'
+      ? `<svg viewBox="0 0 24 24"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>${esc(f.name)}`
+      : `<svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>${esc(f.name)}`;
+    if (f.type === 'dir') {
+      item.onclick = async () => {
+        const sub = document.createElement('div');
+        sub.style.paddingLeft = '1rem';
+        item.after(sub);
+        if (item.dataset.open === '1') { sub.remove(); item.dataset.open = '0'; return; }
+        item.dataset.open = '1';
+        try {
+          const data = await api('GET', `/api/files/${fileState.projectId}?path=${encodeURIComponent(fullPath)}`);
+          renderFileList(data.files, sub, fullPath);
+        } catch {}
+      };
+    } else {
+      item.onclick = () => openFile(fullPath, f.name);
+    }
+    container.appendChild(item);
+  }
+}
+
+async function openFile(filePath, name) {
+  try {
+    const data = await api('GET', `/api/files/${fileState.projectId}/read?path=${encodeURIComponent(filePath)}`);
+    fileState.openFile = filePath;
+    document.getElementById('editor-filename').textContent = filePath;
+    document.getElementById('editor-content').value = data.content;
+    document.getElementById('save-btn').style.display = '';
+    document.getElementById('delete-file-btn').style.display = '';
+    document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+  } catch (e) { alert(e.message); }
+}
+
+async function saveFile() {
+  if (!fileState.openFile) return;
+  const content = document.getElementById('editor-content').value;
+  try {
+    await api('POST', `/api/files/${fileState.projectId}/write`, { path: fileState.openFile, content });
+    const btn = document.getElementById('save-btn');
+    btn.textContent = 'Saved!'; setTimeout(() => btn.textContent = 'Save', 1500);
+  } catch (e) { alert(e.message); }
+}
+
+async function deleteOpenFile() {
+  if (!fileState.openFile || !confirm(`Delete ${fileState.openFile}?`)) return;
+  try {
+    await fetch(`/api/files/${fileState.projectId}/delete?path=${encodeURIComponent(fileState.openFile)}`, { method: 'DELETE', credentials: 'include' });
+    fileState.openFile = null;
+    document.getElementById('editor-filename').textContent = 'No file open';
+    document.getElementById('editor-content').value = '';
+    document.getElementById('save-btn').style.display = 'none';
+    document.getElementById('delete-file-btn').style.display = 'none';
+    loadFileTree();
+  } catch (e) { alert(e.message); }
+}
+
+async function newFilePrompt() {
+  const name = prompt('File name (e.g. src/components/Button.tsx):');
+  if (!name || !fileState.projectId) return;
+  await api('POST', `/api/files/${fileState.projectId}/write`, { path: name, content: '' });
+  loadFileTree();
+  openFile(name, name.split('/').pop());
+}
+
+async function newFolderPrompt() {
+  const name = prompt('Folder name:');
+  if (!name || !fileState.projectId) return;
+  await api('POST', `/api/files/${fileState.projectId}/write`, { path: `${name}/.gitkeep`, content: '' });
+  loadFileTree();
+}
+
+// ─── Credits Page ─────────────────────────────────────────────────────────────
+async function renderCredits() {
+  const el = document.getElementById('page-credits');
+  el.innerHTML = `<div class="page-header"><div><div class="page-title">Credits & Billing</div><div class="page-sub">Manage your credits and plan</div></div></div><div id="credits-content"><div style="color:var(--muted)">Loading...</div></div>`;
+  try {
+    const data = await api('GET', '/api/credits');
+    state.user.credits = data.credits;
+    updateSidebarCredits();
+    const plans = [
+      { id: 'free', name: 'Free', price: 0, credits: 100 },
+      { id: 'starter', name: 'Starter', price: 9, credits: 500 },
+      { id: 'pro', name: 'Pro', price: 29, credits: 2000 },
+      { id: 'enterprise', name: 'Enterprise', price: 99, credits: 10000 },
+    ];
+    const txHtml = (data.history || []).slice(0, 20).map(t => `
+      <div class="tx-item">
+        <span class="tx-desc">${esc(t.description || t.type)}</span>
+        <span class="tx-amount ${t.amount > 0 ? 'pos' : 'neg'}">${t.amount > 0 ? '+' : ''}${t.amount}</span>
+        <span class="tx-date">${new Date(t.created_at).toLocaleDateString()}</span>
+      </div>`).join('') || '<div style="color:var(--muted);font-size:.85rem">No transactions yet</div>';
+
+    document.getElementById('credits-content').innerHTML = `
+      <div class="stat-grid" style="margin-bottom:2rem">
+        <div class="stat-card"><div class="stat-label">Current Balance</div><div class="stat-value cyan">${data.credits}</div></div>
+        <div class="stat-card"><div class="stat-label">Current Plan</div><div class="stat-value yellow" style="font-size:1.2rem;text-transform:capitalize">${state.user.plan}</div></div>
+        <div class="stat-card"><div class="stat-label">Build Cost</div><div class="stat-value" style="font-size:1.2rem">${data.costs.build} cr</div></div>
+        <div class="stat-card"><div class="stat-label">Chat Cost</div><div class="stat-value" style="font-size:1.2rem">${data.costs.chat_message} cr</div></div>
+      </div>
+      <div class="section-title">Plans</div>
+      <div class="plans-grid">${plans.map(p => `<div class="plan-card ${state.user.plan === p.id ? 'current' : ''}"><div class="plan-name">${p.name}</div><div class="plan-price">$${p.price}<span>/mo</span></div><div class="plan-credits">${p.credits.toLocaleString()} credits</div>${state.user.plan === p.id ? '<div style="margin-top:.75rem"><span class="badge badge-cyan">Current</span></div>' : `<button class="btn-primary btn-sm" style="margin-top:.75rem;width:100%" onclick="alert('Stripe integration coming soon!')">Upgrade</button>`}</div>`).join('')}</div>
+      <hr class="divider">
+      <div class="flex-between" style="margin-bottom:1rem"><div class="section-title" style="margin:0">Add Credits (Demo)</div><button class="btn-primary btn-sm" onclick="topupCredits()">+ Add 100 Credits</button></div>
+      <div class="section-title">Transaction History</div>
+      <div class="tx-list">${txHtml}</div>`;
+  } catch (e) { document.getElementById('credits-content').innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+async function topupCredits() {
+  try {
+    const data = await api('POST', '/api/credits/topup', { amount: 100 });
+    state.user.credits = data.credits;
+    updateSidebarCredits();
+    renderCredits();
+  } catch (e) { alert(e.message); }
+}
+
+// ─── Settings Page ────────────────────────────────────────────────────────────
+function renderSettings() {
+  const el = document.getElementById('page-settings');
+  el.innerHTML = `
+    <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Configure your account and API keys</div></div></div>
+    <div class="card" style="max-width:600px">
+      <div class="settings-section">
+        <div class="settings-label">Anthropic API Key</div>
+        <div class="settings-row">
+          <input type="password" class="settings-input" id="api-key-input" placeholder="sk-ant-api03-..." value="">
+          <button class="btn-primary" onclick="saveApiKey()">Save</button>
+        </div>
+        <div style="color:var(--muted);font-size:.78rem;margin-top:.5rem">Your key is stored securely and used for AI builds. Get one at <a href="https://console.anthropic.com" target="_blank" style="color:var(--cyan)">console.anthropic.com</a></div>
+      </div>
+      <hr class="divider">
+      <div class="settings-section">
+        <div class="settings-label">Account</div>
+        <div style="display:grid;gap:.5rem;font-size:.88rem">
+          <div class="flex-between"><span style="color:var(--muted)">Name</span><span>${esc(state.user?.name || '')}</span></div>
+          <div class="flex-between"><span style="color:var(--muted)">Email</span><span>${esc(state.user?.email || '')}</span></div>
+          <div class="flex-between"><span style="color:var(--muted)">Plan</span><span style="text-transform:capitalize">${state.user?.plan}</span></div>
+          <div class="flex-between"><span style="color:var(--muted)">Credits</span><span style="color:var(--cyan)">${state.user?.credits}</span></div>
+        </div>
+      </div>
+      <hr class="divider">
+      <div class="settings-section">
+        <div class="settings-label">CLI Usage</div>
+        <div style="background:var(--surface);border-radius:8px;padding:1rem;font-family:monospace;font-size:.82rem;color:var(--dim)">
+          <div style="color:var(--muted);margin-bottom:.5rem"># Install globally</div>
+          <div>npm install -g mastercode</div>
+          <div style="margin-top:.75rem;color:var(--muted)"># Set API key</div>
+          <div>mc config set-key sk-ant-...</div>
+          <div style="margin-top:.75rem;color:var(--muted)"># Build a project</div>
+          <div>mc build "your app description"</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key) return;
+  try {
+    await api('POST', '/api/credits/set-api-key', { apiKey: key });
+    document.getElementById('api-key-input').value = '';
+    alert('API key saved!');
+  } catch (e) { alert(e.message); }
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+checkAuth();
