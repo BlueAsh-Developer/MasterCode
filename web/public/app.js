@@ -261,3 +261,118 @@ async function startBuild() {
   await refreshCredits();
   document.getElementById('build-credits').textContent = state.user.credits;
 }
+
+// ─── Chat Page ────────────────────────────────────────────────────────────────
+function renderChat() {
+  const el = document.getElementById('page-chat');
+  const projectOptions = state.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  el.innerHTML = `
+    <div class="page-header"><div><div class="page-title">AI Chat</div><div class="page-sub">Multi-turn conversation with your AI agent</div></div><button class="btn-secondary btn-sm" onclick="clearChat()">Clear</button></div>
+    <select class="project-selector" id="chat-project"><option value="">No project context</option>${projectOptions}</select>
+    <div class="chat-wrap" style="height:calc(100vh - 14rem)">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg" style="max-width:100%">
+          <div class="msg-avatar">AI</div>
+          <div class="msg-bubble">👋 Hi! I'm MasterCode, your AI developer. Tell me what you want to build, add, or fix. I can write code, create files, install packages, and build complete full-stack apps.</div>
+        </div>
+      </div>
+      <div class="chat-input-wrap">
+        <textarea id="chat-input" placeholder="Ask me to build something, add a feature, fix a bug..." rows="2" onkeydown="chatKeydown(event)"></textarea>
+        <button class="btn-primary" id="chat-send" onclick="sendChat()">Send</button>
+      </div>
+    </div>`;
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function clearChat() {
+  state.chatHistory = [];
+  renderChat();
+}
+
+function appendChatMsg(role, content, isStreaming = false) {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.id = isStreaming ? 'streaming-msg' : '';
+  div.innerHTML = `<div class="msg-avatar">${role === 'user' ? state.user?.name?.[0] || 'U' : 'AI'}</div><div class="msg-bubble">${esc(content)}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const message = input.value.trim();
+  if (!message) return;
+
+  const projectId = document.getElementById('chat-project').value;
+  input.value = '';
+  appendChatMsg('user', message);
+
+  const btn = document.getElementById('chat-send');
+  btn.disabled = true; btn.textContent = '...';
+
+  state.chatHistory.push({ role: 'user', content: message });
+
+  // Streaming AI response
+  const msgs = document.getElementById('chat-messages');
+  const aiDiv = document.createElement('div');
+  aiDiv.className = 'msg';
+  aiDiv.innerHTML = `<div class="msg-avatar">AI</div><div class="msg-bubble" id="ai-streaming">⏳ Thinking...</div>`;
+  msgs.appendChild(aiDiv);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  let fullText = '';
+
+  try {
+    const res = await fetch('/api/agent/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ message, projectId: projectId || undefined, history: state.chatHistory.slice(-10) }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      document.getElementById('ai-streaming').textContent = '✗ ' + err.error;
+      btn.disabled = false; btn.textContent = 'Send';
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    const bubble = document.getElementById('ai-streaming');
+    bubble.textContent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'text') { fullText += ev.content; bubble.textContent = fullText; }
+          else if (ev.type === 'tool') { bubble.textContent = fullText + `\n⚙ ${ev.name}...`; }
+          else if (ev.type === 'file_created') { bubble.textContent = fullText + `\n✍ Created: ${ev.path}`; }
+          else if (ev.type === 'complete') { bubble.textContent = fullText || ev.result?.summary || 'Done!'; }
+          else if (ev.type === 'error') { bubble.textContent = '✗ ' + ev.message; }
+          msgs.scrollTop = msgs.scrollHeight;
+        } catch {}
+      }
+    }
+  } catch (e) {
+    const b = document.getElementById('ai-streaming');
+    if (b) b.textContent = '✗ ' + e.message;
+  }
+
+  state.chatHistory.push({ role: 'assistant', content: fullText || 'Done' });
+  btn.disabled = false; btn.textContent = 'Send';
+  await refreshCredits();
+}
