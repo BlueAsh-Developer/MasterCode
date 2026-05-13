@@ -71,7 +71,7 @@ db.exec(`
 export { db };
 
 export const Users = {
-  create: db.prepare(`INSERT INTO users (id,email,password,name,credits) VALUES (?,?,?,?,100)`),
+  create: db.prepare(`INSERT INTO users (id,email,password,name) VALUES (?,?,?,?)`),
   findByEmail: db.prepare(`SELECT * FROM users WHERE email=?`),
   findById: db.prepare(`SELECT * FROM users WHERE id=?`),
   updateCredits: db.prepare(`UPDATE users SET credits=credits+? WHERE id=?`),

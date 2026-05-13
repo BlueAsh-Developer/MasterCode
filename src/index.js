@@ -98,6 +98,18 @@ program
   .description('Show help')
   .action(() => { printBanner(); printHelp(); });
 
+// ─── web ──────────────────────────────────────────────────────────────────────
+program
+  .command('web')
+  .description('Launch the MasterCode web interface')
+  .option('-p, --port <port>', 'Port number', '4000')
+  .option('-o, --open', 'Open in browser')
+  .action(async (options) => {
+    process.env.PORT = options.port;
+    if (options.open) process.argv.push('--open');
+    await import('../web/index.js');
+  });
+
 // Show banner on bare invocation
 if (process.argv.length === 2) {
   printBanner();
