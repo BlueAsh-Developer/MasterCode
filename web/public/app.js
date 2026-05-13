@@ -90,8 +90,19 @@ async function checkAuth() {
   try {
     const data = await api('GET', '/api/auth/me');
     state.user = data.user;
-    showApp();
+    // Don't auto-redirect — let user stay on homepage, just update nav
+    updateHomeNav();
   } catch { /* not logged in, show homepage */ }
+}
+
+function updateHomeNav() {
+  // Replace Sign In / Get Started with "Go to Dashboard" if logged in
+  const links = document.querySelector('.home-nav-links');
+  if (!links || !state.user) return;
+  links.innerHTML = `
+    <span style="color:var(--muted);font-size:.9rem">Hi, ${esc(state.user.name)}</span>
+    <button class="btn-primary" onclick="showApp()">Go to Dashboard →</button>
+    <button class="btn-outline" onclick="logout()">Sign Out</button>`;
 }
 
 function showApp() {
