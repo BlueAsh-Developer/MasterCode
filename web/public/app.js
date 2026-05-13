@@ -419,3 +419,246 @@ async function startBuild() {
   btn.disabled = false;
   btn.textContent = '⚡ Build App';
 }
+
+// ─── Chat Page ────────────────────────────────────────────────────────────────
+function renderChat() {
+  const el = document.getElementById('page-chat');
+  el.innerHTML = `
+    <div class="page-header">
+      <div><div class="page-title">AI Chat</div><div class="page-sub">Chat with AI about your projects</div></div>
+    </div>
+    <div class="chat-wrap">
+      <div class="chat-messages" id="chat-messages">
+        <div class="msg ai"><div class="msg-avatar">AI</div><div class="msg-bubble">Hi! I'm MasterCode. Ask me to build something, fix a bug, or explain code.</div></div>
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-toolbar">
+          <select id="chat-project-select" class="chat-select">
+            <option value="">No project context</option>
+            ${state.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+          </select>
+          <div class="model-dropdown-wrap" id="page-chat-model-wrap">
+            <button class="model-selector-btn sm" id="page-chat-model-btn" onclick="togglePageChatModelDropdown()">
+              <span class="model-provider-dot" id="page-chat-dot"></span>
+              <span id="page-chat-model-label">Select Model</span>
+              <svg class="chevron" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+            </button>
+            <div class="model-dropdown" id="page-chat-model-dropdown"></div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" class="chat-input" placeholder="Ask anything..." rows="2" onkeydown="pageChatKeydown(event)"></textarea>
+          <button class="btn-primary" id="chat-send-btn" onclick="sendPageChat()">Send</button>
+        </div>
+      </div>
+    </div>`;
+
+  setTimeout(() => {
+    renderModelDropdown('page-chat-model-dropdown', 'page-chat-model-label', 'page-chat-dot', selectPageChatModel);
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#page-chat-model-wrap')) document.getElementById('page-chat-model-dropdown')?.classList.remove('open');
+    });
+  }, 0);
+}
+
+function selectPageChatModel(id, provider) { selectModel(id, provider, 'page-chat-model-dropdown', 'page-chat-model-label', 'page-chat-dot'); }
+function togglePageChatModelDropdown() {
+  document.getElementById('page-chat-model-dropdown').classList.toggle('open');
+  renderModelDropdown('page-chat-model-dropdown', 'page-chat-model-label', 'page-chat-dot', selectPageChatModel);
+}
+function pageChatKeydown(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendPageChat(); } }
+
+async function sendPageChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+
+  const messages = document.getElementById('chat-messages');
+  messages.innerHTML += `<div class="msg user"><div class="msg-avatar">You</div><div class="msg-bubble">${esc(msg)}</div></div>`;
+
+  const aiDiv = document.createElement('div');
+  aiDiv.className = 'msg ai';
+  aiDiv.innerHTML = `<div class="msg-avatar">AI</div><div class="msg-bubble" id="ai-resp-${Date.now()}"><span class="typing-dots">···</span></div>`;
+  messages.appendChild(aiDiv);
+  messages.scrollTop = messages.scrollHeight;
+
+  const bubble = aiDiv.querySelector('.msg-bubble');
+  const projectId = document.getElementById('chat-project-select')?.value;
+
+  state.chatHistory.push({ role: 'user', content: msg });
+
+  try {
+    const res = await fetch('/api/agent/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ message: msg, projectId, history: state.chatHistory.slice(-10), model: state.selectedModel, provider: state.selectedProvider }),
+    });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', fullText = '';
+    bubble.innerHTML = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const ev = JSON.parse(line.slice(6));
+          if (ev.type === 'text') { fullText += ev.content; bubble.textContent = fullText; messages.scrollTop = messages.scrollHeight; }
+          else if (ev.type === 'complete') refreshCredits();
+        } catch {}
+      }
+    }
+    state.chatHistory.push({ role: 'assistant', content: fullText });
+  } catch (e) { bubble.textContent = `Error: ${e.message}`; }
+}
+
+// ─── Files Page ───────────────────────────────────────────────────────────────
+function renderFiles() {
+  const el = document.getElementById('page-files');
+  if (!state.projects.length) {
+    el.innerHTML = `<div class="page-header"><div class="page-title">File Manager</div></div><div class="empty-state"><div class="empty-icon">📁</div><div>No projects yet</div></div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="page-header"><div class="page-title">File Manager</div></div>
+    <div class="files-project-select">
+      <select id="files-project" onchange="loadFileTree()" class="settings-input" style="max-width:300px">
+        <option value="">Select a project</option>
+        ${state.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="files-layout">
+      <div class="file-tree" id="page-file-tree"><div class="empty-state" style="padding:2rem">Select a project</div></div>
+      <div class="code-editor-wrap">
+        <div class="editor-toolbar">
+          <span class="editor-filename" id="page-editor-filename">No file selected</span>
+          <button class="btn-sm btn-secondary" onclick="savePageFile()">Save</button>
+        </div>
+        <textarea class="code-editor" id="page-code-editor" spellcheck="false" placeholder="Select a file to edit..."></textarea>
+      </div>
+    </div>`;
+}
+
+async function loadFileTree() {
+  const projectId = document.getElementById('files-project')?.value;
+  if (!projectId) return;
+  const tree = document.getElementById('page-file-tree');
+  tree.innerHTML = '<div style="padding:1rem;color:var(--muted)">Loading...</div>';
+  try {
+    const data = await api('GET', `/api/files/${projectId}`);
+    tree.innerHTML = renderFileList(data.files, projectId, '');
+  } catch (e) { tree.innerHTML = `<div style="color:var(--red);padding:1rem">${e.message}</div>`; }
+}
+
+function renderFileList(files, projectId, basePath) {
+  return files.map(f => {
+    if (f.type === 'dir') return `<div class="tree-dir" onclick="toggleDir(this,'${projectId}','${f.path}')"><span class="tree-icon">📁</span>${esc(f.name)}<div class="tree-children hidden"></div></div>`;
+    return `<div class="tree-file" onclick="openPageFile('${projectId}','${f.path}')"><span class="tree-icon">📄</span>${esc(f.name)}</div>`;
+  }).join('');
+}
+
+async function toggleDir(el, projectId, dirPath) {
+  const children = el.querySelector('.tree-children');
+  if (children.classList.toggle('hidden')) return;
+  if (children.innerHTML) return;
+  try {
+    const data = await api('GET', `/api/files/${projectId}?path=${encodeURIComponent(dirPath)}`);
+    children.innerHTML = renderFileList(data.files, projectId, dirPath);
+  } catch {}
+}
+
+async function openPageFile(projectId, filePath) {
+  try {
+    const data = await api('GET', `/api/files/${projectId}/read?path=${encodeURIComponent(filePath)}`);
+    document.getElementById('page-code-editor').value = data.content;
+    document.getElementById('page-editor-filename').textContent = filePath;
+    state.currentFile = { projectId, path: filePath };
+  } catch (e) { alert(e.message); }
+}
+
+async function savePageFile() {
+  if (!state.currentFile) return;
+  const content = document.getElementById('page-code-editor').value;
+  try {
+    await api('POST', `/api/files/${state.currentFile.projectId}/write`, { path: state.currentFile.path, content });
+  } catch (e) { alert(e.message); }
+}
+
+// ─── Credits Page ─────────────────────────────────────────────────────────────
+async function renderCredits() {
+  const el = document.getElementById('page-credits');
+  el.innerHTML = `<div class="page-header"><div class="page-title">Credits</div></div><div style="color:var(--muted)">Loading...</div>`;
+  try {
+    const data = await api('GET', '/api/credits');
+    el.innerHTML = `
+      <div class="page-header"><div><div class="page-title">Credits</div><div class="page-sub">Manage your usage</div></div></div>
+      <div class="stat-grid" style="margin-bottom:2rem">
+        <div class="stat-card"><div class="stat-label">Balance</div><div class="stat-value cyan">${data.credits}</div></div>
+        <div class="stat-card"><div class="stat-label">Plan</div><div class="stat-value purple" style="font-size:1.1rem;text-transform:capitalize">${data.plan}</div></div>
+      </div>
+      <div class="card" style="margin-bottom:1.5rem">
+        <div class="section-title" style="margin-bottom:1rem">Top Up Credits</div>
+        <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+          ${[50,100,200,500].map(n => `<button class="btn-secondary" onclick="topUp(${n})">${n} credits</button>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-bottom:1rem">Credit Costs</div>
+        <div class="cost-table">
+          <div class="cost-row"><span>Build</span><span class="cost-val">10 credits</span></div>
+          <div class="cost-row"><span>Chat message</span><span class="cost-val">1 credit</span></div>
+        </div>
+      </div>`;
+  } catch (e) { el.innerHTML = `<div style="color:var(--red)">${e.message}</div>`; }
+}
+
+async function topUp(amount) {
+  try {
+    const data = await api('POST', '/api/credits/topup', { amount });
+    state.user.credits = data.credits;
+    updateSidebarCredits();
+    renderCredits();
+  } catch (e) { alert(e.message); }
+}
+
+// ─── Settings Page ────────────────────────────────────────────────────────────
+function renderSettings() {
+  const el = document.getElementById('page-settings');
+  el.innerHTML = `
+    <div class="page-header"><div><div class="page-title">Settings</div><div class="page-sub">Configure your API keys and preferences</div></div></div>
+    <div class="card" style="margin-bottom:1.5rem">
+      <div class="section-title" style="margin-bottom:1rem">API Keys</div>
+      <div class="settings-form">
+        <label>Anthropic API Key
+          <input type="password" id="anthropic-key" class="settings-input" placeholder="sk-ant-api03-...">
+        </label>
+        <label>Google Gemini API Key
+          <input type="password" id="gemini-key" class="settings-input" placeholder="AIza...">
+        </label>
+        <button class="btn-primary" onclick="saveApiKeys()">Save Keys</button>
+        <div id="keys-msg" class="form-error" style="color:var(--green)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title" style="margin-bottom:1rem">Account</div>
+      <div style="color:var(--muted);font-size:.9rem">
+        <div>Email: ${esc(state.user?.email)}</div>
+        <div style="margin-top:.5rem">Name: ${esc(state.user?.name)}</div>
+        <div style="margin-top:.5rem">Plan: ${esc(state.user?.plan)}</div>
+      </div>
+    </div>`;
+}
+
+async function saveApiKeys() {
+  const anthropicKey = document.getElementById('anthropic-key').value.trim();
+  const geminiKey = document.getElementById('gemini-key').value.trim();
+  const msg = document.getElementById('keys-msg');
+  try {
+    await api('POST', '/api/credits/set-api-key', { apiKey: anthropicKey || undefined, geminiApiKey: geminiKey || undefined });
+    msg.textContent = '✓ Keys saved successfully';
+    msg.style.color = 'var(--green)';
+  } catch (e) { msg.textContent = e.message; msg.style.color = 'var(--red)'; }
+}
