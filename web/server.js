@@ -33,9 +33,7 @@ app.post('/api/auth/register', async (req, res) => {
   const id = uuid();
   const hashed = await hashPassword(password);
   Users.create.run(id, email, hashed, name);
-  // Give welcome credits
-  const { Credits: C } = await import('./db.js');
-  C.log.run(uuid(), id, 100, 'welcome', 'Welcome bonus credits');
+  Credits.log.run(uuid(), id, 100, 'welcome', 'Welcome bonus credits');
 
   const token = createSession(id);
   res.cookie('token', token, { httpOnly: true, maxAge: 7 * 24 * 3600 * 1000 });
